@@ -262,28 +262,43 @@ async def угадать(ctx, guess):
 # =====================
 # 🧠 ОТВЕТЫ В ЧАТЕ
 # =====================
+last_messages = {}  # защита от дублей
+
 @bot.event
 async def on_message(message):
     await asyncio.sleep(random.uniform(0.2, 0.6))
 
+    # ❗ игнорируем ботов сразу
     if message.author.bot:
         return
+
+    # 💣 защита от двойных срабатываний
+    now = datetime.datetime.now()
+    last = last_messages.get(message.author.id)
+
+    if last and (now - last).total_seconds() < 1.5:
+        return
+
+    last_messages[message.author.id] = now
 
     text = message.content.lower()
     user_memory[message.author.id] = text
 
-    global last_hunger_tick
+    # =====================
+    # 🍽️ ГОЛОД (мягкий рост)
+    # =====================
+    if message.author.id not in hunger:
+        hunger[message.author.id] = 50
 
-    # авто-рост голода (мягкий)
-    if message.author.id in hunger:
-        hunger[message.author.id] += random.randint(0, 2)
-        hunger[message.author.id] = min(100, hunger[message.author.id])
+    hunger[message.author.id] += random.randint(0, 2)
+    hunger[message.author.id] = min(100, hunger[message.author.id])
 
-    response = None
-    h = hunger.get(message.author.id, 50)
+    h = hunger[message.author.id]
     state = hunger_state(h)
 
-   # =====================
+    response = None
+
+    # =====================
     # 🧠 ДИАЛОГ
     # =====================
     if "привет" in text:
@@ -364,10 +379,21 @@ async def on_message(message):
             "Я не забываю тебя, даже если молчу",
         ])
 
+    # =====================
+    # 🦊 РЕАКЦИЯ НА ГОЛОД
+    # =====================
     if response:
-        await asyncio.sleep(random.uniform(0.2, 0.8))
+        if state == "hungry":
+            response += "\n…я немного голодна"
+        elif state == "critical":
+            response += "\n🦊 мне правда нужно поесть..."
+        elif state == "full":
+            response += "\n✨ я сытая..."
+
+        await asyncio.sleep(random.uniform(0.2, 0.6))
         await message.channel.send(response)
 
+    # ❗ ВАЖНО: команды должны работать всегда
     await bot.process_commands(message)
 
 # =====================
