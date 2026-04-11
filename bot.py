@@ -127,7 +127,7 @@ async def покормить(ctx, food=""):
     if ctx.author.id not in hunger:
         hunger[ctx.author.id] = 50
 
-    good_food = ["ягоды", "печенье", "молоко", "рыба"]
+    good_food = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
 
     if food.lower() in good_food:
         hunger[ctx.author.id] -= 10
@@ -139,7 +139,7 @@ async def покормить(ctx, food=""):
     await ctx.send(
         f"{msg}\n"
         f"🍽️ Голод Сенко: {hunger[ctx.author.id]}\n\n"
-        "📌 Поддерживаемая еда: ягоды, печенье, молоко, рыба"
+        "📌 Поддерживаемая еда: ягоды, печенье, молоко, рыба, тофу"
     )
 
 # =====================
