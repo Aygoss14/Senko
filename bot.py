@@ -309,6 +309,4 @@ async def помощь(ctx):
 # ЗАПУСК
 # =====================
 TOKEN = os.getenv("MTQ5MjEzMzA1OTQyMjU4ODk0OA.G_WxMH.OiihNXODoCMWX46vijovcX1GSvtlO7b91homOs")
-
-if not TOKEN:
-    raise ValueError("DISCORD_TOKEN не найден в переменных окружения")
+bot.run(TOKEN)
