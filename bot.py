@@ -93,8 +93,11 @@ async def on_ready():
 
     print(f"Бот запущен как {bot.user}")
 
-    hunger_tick.start()
-    send_daily_fact.start()
+    if not hunger_tick.is_running():
+        hunger_tick.start()
+
+    if not send_daily_fact.is_running():
+        send_daily_fact.start()
         
 food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
 
@@ -128,9 +131,12 @@ async def send_daily_fact():
 
         key = now.strftime("%d-%m")
 
-        msg = holiday_facts.get(key, "🦊 Факт: " + random.choice(fox_facts))
-        await channel.send(msg)
+        msg = holiday_facts.get(
+            key,
+            "🦊 Факт: " + random.choice(fox_facts)
+        )
 
+        await channel.send(msg)
 
 # =====================
 # 🟢 ON READY (ИСПРАВЛЕННЫЙ)
