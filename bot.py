@@ -129,6 +129,8 @@ async def покормить(ctx, *, food=""):
 
     food = food.lower().strip()
 
+    food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
+
     if food in food_list:
         hunger[ctx.author.id] -= 10
         msg = "🦊 Мм... вкусно... спасибо 🌸"
