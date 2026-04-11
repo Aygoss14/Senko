@@ -5,267 +5,280 @@ import datetime
 import os
 import asyncio
 
-# =====================
-# INTENTS
-# =====================
+# ======================================================
+# 1. НАСТРОЙКИ, ИНТЕНТЫ И ГЛОБАЛЬНЫЕ ДАННЫЕ
+# ======================================================
+
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# =====================
-# ПАМЯТЬ
-# =====================
+# ID канала для автоматических сообщений (ОБЯЗАТЕЛЬНО ЗАМЕНИ НА СВОЙ)
+CHANNEL_ID = 1492134822666174605 
+
+# Память бота в рамках одной сессии
 user_memory = {}
-
-# =====================
-# 🦊 ЛИСЫ
-# =====================
-fox_facts = [
-    "Лисы относятся к семейству псовых",
-    "Самый распространённый вид — рыжая лиса",
-    "Лисы встречаются почти по всему миру",
-    "Лисы умеют адаптироваться к городским условиям",
-    "У лис очень острый слух",
-    "Лиса может слышать мышь под снегом",
-    "Лисы охотятся в основном ночью",
-    "Лисы являются всеядными животными",
-    "Лисы могут прыгать высоко вверх для охоты",
-    "Рыжая лиса — символ хитрости",
-    "Фенек — самая маленькая лиса в мире",
-    "Фенек живёт в пустыне Сахара",
-    "У фенека огромные уши для охлаждения",
-    "Арктическая лиса меняет цвет шерсти по сезонам",
-    "Лисы могут запоминать места с едой",
-    "Лисы иногда притворяются мёртвыми",
-    "Лисы способны слышать под снегом",
-    "Лисы могут издавать более 20 разных звуков",
-    "Лисы могут жить рядом с людьми",
-    "Лисы иногда ведут себя как кошки",
-]
-
-# =====================
-# 🎉 ПРАЗДНИКИ
-# =====================
-holiday_facts = {
-    "01-01": "Новый год 🎆 — лисы становятся осторожнее зимой.",
-    "14-02": "День любви 💕 — лисы часто создают пары на жизнь.",
-    "08-03": "Весна 🌸 — лисы становятся активнее.",
-    "01-05": "Весенний день 🌿 — природа просыпается.",
-    "31-10": "Хэллоуин 👻 — лис считали духами леса.",
-    "25-12": "Зима ❄️ — арктические лисы почти исчезают в снегу.",
-    "01-11": "🦊 ДЕНЬ ЛИС — праздник хитрости и свободы лис!",
-}
-
-CHANNEL_ID = 1492134822666174605
-
-# =====================
-# ИГРОВЫЕ ДАННЫЕ
-# =====================
-emotion_game = {}
+last_fact_date = None 
 truth_game = {}
+mood_game = {}
 hunger = {}
 last_messages = {}
 
-food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
+# Константы
+FOOD_LIST = ["ягоды", "печенье", "молоко", "рыба", "тофу", "мясо", "хлеб", "грибы", "яблоко"]
 
-# =====================
-# ГОЛОД СТАТУС
-# =====================
-def hunger_state(value: int):
-    if value <= 0:
-        return "full"
-    elif value >= 85:
-        return "critical"
-    elif value >= 70:
-        return "hungry"
-    return "ok"
+# ======================================================
+# 2. БАЗА ДАННЫХ (ФРАЗЫ, ФАКТЫ, НАСТРОЕНИЯ)
+# ======================================================
 
-# =====================
-# ON READY
-# =====================
-_started = False
+MOODS = {
+    "игривое": [
+        "Я прыгаю вокруг своего хвоста!", 
+        "Где мой любимый мячик?", 
+        "Тяв! Давай побегаем по лесу!"
+    ],
+    "сонное": [
+        "Глаза сами закрываются...", 
+        "Хвост такой мягкий, как подушка...", 
+        "Зеееев... Кажется, пора в нору."
+    ],
+    "задумчивое": [
+        "Смотрю на облака и думаю о вечном...", 
+        "Почему люди не умеют тявкать так же красиво?", 
+        "Лес сегодня какой-то по-особенному тихий..."
+    ],
+    "голодное": [
+        "В животе урчит, как у маленького трактора...", 
+        "Где-то здесь точно прятались вкусные ягоды...", 
+        "Моя миска выглядит очень одиноко и пусто."
+    ],
+    "одинокое": [
+        "В чате так тихо... мне совсем не с кем поиграть.", 
+        "Скучаю по чьим-то добрым словам и поглаживаниям.", 
+        "Тихо сижу в уголке и жду друзей."
+    ]
+}
+
+FOX_FACTS = [
+    "Лисы относятся к семейству псовых.",
+    "У лис очень острый слух: они слышат мышь под метром снега.",
+    "Фенек — самая маленькая лиса в мире весом всего 1.5 кг.",
+    "Зрачки лисы вертикальные, как у кошек.",
+    "Лиса может прыгать на высоту до 2 метров.",
+    "Лисы используют магнитное поле Земли, чтобы находить добычу.",
+    "В Японии лиса (Кицунэ) считается символом мудрости и удачи.",
+    "Лисы — всеядные: едят и жуков, и фрукты, и мелких грызунов.",
+    "Хвост лисы помогает ей балансировать при беге и согревает зимой.",
+    "Лиса может бегать со скоростью до 50 км/ч."
+]
+
+TRUTH_OR_DARE_FACTS = [
+    ("Лисы могут слышать мышей под снегом на расстоянии 30 метров", True),
+    ("Фенек живёт в лесах Сибири", False),
+    ("Лисы могут прыгать почти на 2 метра в высоту", True),
+    ("У лисиц вертикальные зрачки, как у кошек", True),
+    ("Лисы всегда охотятся стаями", False),
+    ("Лисы могут бегать со скоростью до 50 км/ч", True),
+    ("Лисы умеют имитировать голоса других животных", False),
+    ("Самая маленькая лиса в мире весит меньше 2 килограмм", True),
+    ("Лисы прячут еду про запас в небольшие ямки", True),
+    ("Лисы живут в среднем 30 лет в дикой природе", False)
+]
+
+FOX_ACTIONS = [
+    "Option 1: 🦊 *Лиса свернулась клубочком и внимательно наблюдает за чатом.*",
+    "Option 2: ✨ *Лиса поправляет свой пушистый хвост и довольно щурится.*",
+    "Option 3: 🐾 *Лиса оставила на ковре невидимый отпечаток лапки и скрылась в тени.*",
+    "Option 4: 📦 *Лиса нашла пустую коробку и теперь пытается в ней поместиться.*",
+    "Option 5: 🦊 *Лисица потянулась, выгнув спинку, и сладко зевнула.*",
+    "Option 6: 🧶 *Лиса нашла чей-то потерянный клубок ниток и задумчиво его катит.*",
+    "Option 7: 🌬️ *Лиса принюхивается, чувствуя легкий весенний сквозняк.*",
+    "Option 8: 👂 *Ушки лисы забавно дернулись в сторону входящего уведомления.*"
+]
+
+# ======================================================
+# 3. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ======================================================
+
+def get_hunger_state(value: int):
+    if value <= 15: return "сытая ✨"
+    elif value >= 85: return "очень голодная 🆘"
+    elif value >= 60: return "проголодалась 🍽️"
+    return "в норме 👍"
+
+# ======================================================
+# 4. ТАСКИ (АВТОМАТИЧЕСКИЕ ЗАДАЧИ)
+# ======================================================
+
+@tasks.loop(minutes=12)
+async def fox_activity():
+    """Отправляет случайное действие каждые 12 минут (нужно для Render)"""
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
+        try: channel = await bot.fetch_channel(CHANNEL_ID)
+        except: return
+    
+    # Добавляем шанс того, что лиса напомнит о голоде
+    if hunger and any(v > 75 for v in hunger.values()):
+        await channel.send("🦊 *Лиса тихонько вздыхает и поглядывает на пустую миску...*")
+    else:
+        await channel.send(random.choice(FOX_ACTIONS))
+
+@tasks.loop(hours=1)
+async def hunger_tick():
+    """Каждый час пользователи 'забывают' покормить лису"""
+    for uid in hunger:
+        hunger[uid] = min(100, hunger[uid] + 8)
+
+@tasks.loop(minutes=1)
+async def daily_fact_task():
+    """Ежедневный факт в 9:00"""
+    global last_fact_date
+    now = datetime.datetime.now()
+    today = now.strftime("%d-%m")
+
+    if now.hour == 9 and now.minute == 0 and last_fact_date != today:
+        channel = bot.get_channel(CHANNEL_ID)
+        if channel:
+            fact = random.choice(FOX_FACTS)
+            await channel.send(f"☀️ **Доброе утро! Лисий факт дня:**\n> {fact}")
+            last_fact_date = today
+
+# ======================================================
+# 5. КОМАНДЫ БОТА
+# ======================================================
 
 @bot.event
 async def on_ready():
-    global _started
-    if _started:
-        return
-    _started = True
-
-    print(f"Бот запущен как {bot.user}")
-
-    if not hunger_tick.is_running():
-        hunger_tick.start()
-
-    if not send_daily_fact.is_running():
-        send_daily_fact.start()
-
-# =====================
-# ⏰ ФАКТ ДНЯ
-# =====================
-@tasks.loop(minutes=1)
-async def send_daily_fact():
-    now = datetime.datetime.now()
-
-    if now.hour == 9 and now.minute == 0:
-        channel = bot.get_channel(CHANNEL_ID)
-
-        if not channel:
-            try:
-                channel = await bot.fetch_channel(CHANNEL_ID)
-            except:
-                return
-
-        key = now.strftime("%d-%m")
-        msg = holiday_facts.get(key, "🦊 Факт: " + random.choice(fox_facts))
-
-        await channel.send(msg)
-
-# =====================
-# 🔁 ТИК ГОЛОДА
-# =====================
-@tasks.loop(minutes=5)
-async def hunger_tick():
-    for user_id in hunger:
-        hunger[user_id] = min(100, hunger[user_id] + 2)
-
-# =====================
-# 🟡 КОРМЛЕНИЕ
-# =====================
-@bot.command()
-async def покормить(ctx, *, food=""):
-    if ctx.author.id not in hunger:
-        hunger[ctx.author.id] = 50
-
-    food = food.lower().strip()
-
-    if food in food_list:
-        hunger[ctx.author.id] -= 25
-        msg = "🦊 Мм... вкусно... спасибо 🌸"
-    else:
-        hunger[ctx.author.id] += 10
-        msg = "…я не уверена, что это еда"
-
-    hunger[ctx.author.id] = max(0, min(100, hunger[ctx.author.id]))
-    state = hunger_state(hunger[ctx.author.id])
-
-    extra = ""
-    if state == "full":
-        extra = "\n✨ Спасибо... я сытая"
-    elif state == "hungry":
-        extra = "\n…я немного голодна"
-    elif state == "critical":
-        extra = "\n🦊 мне правда нужно поесть..."
-
-    await ctx.send(f"{msg}{extra}\n🍽️ Голод: {hunger[ctx.author.id]}")
-
-# =====================
-# 🔵 ПРАВДА / ЛОЖЬ
-# =====================
-@bot.command()
-async def правда(ctx):
-
-    facts = [
-        ("Лисы могут слышать мышей под снегом", True),
-        ("Фенек живёт в пустыне", True),
-        ("Лисы живут только в России", False),
-        ("Лисы могут прыгать почти на 2 метра", True),
-        ("Лисы — кошачьи животные", False),
-        ("Арктическая лиса меняет цвет зимой", True),
-        ("Лисы не издают звуков", False),
-        ("Лисы умеют лазить по деревьям", True),
-        ("Лисы живут 200 лет", False),
-        ("Лисы могут жить в городах", True),
-    ]
-
-    fact, answer = random.choice(facts)
-    truth_game[ctx.author.id] = answer
-
-    await ctx.send(f"🦊 Правда или ложь?\n{fact}\n\n!ответ правда / !ответ ложь")
-
-@bot.command()
-async def ответ(ctx, guess):
-    correct = truth_game.get(ctx.author.id)
-
-    if correct is None:
-        await ctx.send("Сначала напиши !правда")
-        return
-
-    user_answer = guess.lower() == "правда"
-
-    if user_answer == correct:
-        await ctx.send(random.choice(["✨ Верно", "🦊 Да", "🌸 Правильно"]))
-    else:
-        await ctx.send(random.choice(["❌ Неверно", "🦊 Нет", "🌸 Ошибка"]))
-
-    truth_game.pop(ctx.author.id, None)
-
-# =====================
-# 🧠 ON_MESSAGE
-# =====================
-@bot.event
-async def on_message(message):
-
-    if message.author.bot:
-        return
-
-    now = datetime.datetime.now()
-
-    last = last_messages.get(message.author.id)
-    if last and (now - last).total_seconds() < 2:
-        return
-    last_messages[message.author.id] = now
-
-    text = message.content.lower()
-    user_memory[message.author.id] = text
-
-    if message.author.id not in hunger:
-        hunger[message.author.id] = 50
-
-    hunger[message.author.id] = min(100, hunger[message.author.id] + random.randint(0, 1))
-    state = hunger_state(hunger[message.author.id])
-
-    response = None
-
-    if "привет" in text:
-        response = "Привет... я рада что ты здесь"
-    elif "как дела" in text:
-        response = "Я спокойна... а ты?"
-    elif "грустно" in text:
-        response = "Я рядом..."
-    elif "кто ты" in text:
-        response = "Я Сенко..."
-
-    if response:
-        if state == "hungry":
-            response += "\n…я немного голодна"
-        elif state == "critical":
-            response += "\n🦊 мне нужно поесть..."
-        elif state == "full":
-            response += "\n✨ я сытая"
-
-        await message.channel.send(response)
-
-    await bot.process_commands(message)
-
-# =====================
-# КОМАНДЫ
-# =====================
-@bot.command()
-async def память(ctx):
-    await ctx.send(user_memory.get(ctx.author.id, "Пусто"))
-
-@bot.command()
-async def время(ctx):
-    await ctx.send(datetime.datetime.now().strftime("%H:%M:%S"))
+    print(f"--- Бот {bot.user} запущен и готов к работе! ---")
+    # Запуск фоновых задач
+    if not fox_activity.is_running(): fox_activity.start()
+    if not hunger_tick.is_running(): hunger_tick.start()
+    if not daily_fact_task.is_running(): daily_fact_task.start()
 
 @bot.command()
 async def помощь(ctx):
-    await ctx.send("!правда !покормить !время !память")
+    embed = discord.Embed(title="🦊 Меню команд лисички Сенко", color=0xff8c00)
+    embed.add_field(name="!эмоция", value="Начать игру 'Угадай настроение'", inline=True)
+    embed.add_field(name="!угадай [слово]", value="Ваш ответ на настроение", inline=True)
+    embed.add_field(name="!покормить [еда]", value="Дать мне вкусняшку", inline=False)
+    embed.add_field(name="!правда", value="Игра 'Правда или Ложь'", inline=True)
+    embed.add_field(name="!ответ [правда/ложь]", value="Ваш ответ на факт", inline=True)
+    embed.add_field(name="!память", value="Что я запомнила о тебе", inline=False)
+    embed.add_field(name="!время", value="Часы в лесу", inline=True)
+    embed.set_footer(text="Я также сама пишу в чат каждые 12 минут!")
+    await ctx.send(embed=embed)
 
-# =====================
-# ЗАПУСК
-# =====================
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-bot.run(DISCORD_TOKEN)
+@bot.command()
+async def эмоция(ctx):
+    """Игра: Лиса загадывает настроение"""
+    mood = random.choice(list(MOODS.keys()))
+    hint = random.choice(MOODS[mood])
+    mood_game[ctx.author.id] = mood
+    
+    await ctx.send(
+        f"🦊 **Угадай моё настроение!**\nПодсказка: *«{hint}»*\n\n"
+        f"Напиши: `!угадай [вариант]`\n"
+        f"*(Варианты: игривое, сонное, задумчивое, голодное, одинокое)*"
+    )
+
+@bot.command()
+async def угадай(ctx, guess: str):
+    """Ответ на игру с настроением"""
+    correct = mood_game.get(ctx.author.id)
+    if not correct:
+        return await ctx.send("Сначала попроси меня загадать настроение командой `!эмоция`!")
+    
+    if guess.lower().strip() == correct:
+        await ctx.send(f"✨ **Верно!** Мне сейчас действительно {correct}. Ты настоящий друг!")
+        mood_game.pop(ctx.author.id)
+    else:
+        await ctx.send("❌ Хмм... нет, это не совсем то. Попробуешь ещё раз?")
+
+@bot.command()
+async def покормить(ctx, *, food=""):
+    uid = ctx.author.id
+    if uid not in hunger: hunger[uid] = 50
+    
+    food = food.lower().strip()
+    if any(item in food for item in FOOD_LIST) and food != "":
+        hunger[uid] = max(0, hunger[uid] - 35)
+        res = "🦊 *Хрум-хрум...* Очень вкусно! Большое спасибо! 🌸"
+    else:
+        hunger[uid] = min(100, hunger[uid] + 5)
+        res = "🦊 *Принюхивается...* Я такое не ем. Дай мне ягод, рыбку или печенье!"
+
+    await ctx.send(f"{res}\n**Мой голод:** {hunger[uid]}% ({get_hunger_state(hunger[uid])})")
+
+@bot.command()
+async def правда(ctx):
+    """Игра Правда или Ложь"""
+    fact, answer = random.choice(TRUTH_OR_DARE_FACTS)
+    truth_game[ctx.author.id] = answer
+    await ctx.send(f"🦊 **Правда или Ложь?**\n> {fact}\n\nНапиши: `!ответ правда` или `!ответ ложь`")
+
+@bot.command()
+async def ответ(ctx, guess: str):
+    correct = truth_game.get(ctx.author.id)
+    if correct is None: return await ctx.send("Сначала используй `!правда`!")
+    
+    user_ans = guess.lower() in ["правда", "да", "true", "правд"]
+    if user_ans == correct:
+        await ctx.send("✨ **Правильно!** Лисье чутье тебя не подвело.")
+    else:
+        await ctx.send("❌ **Ошибочка!** На самом деле всё иначе.")
+    truth_game.pop(ctx.author.id, None)
+
+@bot.command()
+async def память(ctx):
+    msg = user_memory.get(ctx.author.id, "ты пока молчал...")
+    await ctx.send(f"🦊 Последнее, что я от тебя слышала: *«{msg}»*")
+
+@bot.command()
+async def время(ctx):
+    now = datetime.datetime.now().strftime("%H:%M:%S")
+    await ctx.send(f"⌚ Сейчас в моём лесу: **{now}**")
+
+# ======================================================
+# 6. ОБРАБОТКА ТЕКСТА И ОН-МЕССЕДЖ
+# ======================================================
+
+@bot.event
+async def on_message(message):
+    if message.author.bot: return
+
+    # Если это команда - выполняем и выходим
+    if message.content.startswith(bot.command_prefix):
+        await bot.process_commands(message)
+        return
+
+    uid = message.author.id
+    now = datetime.datetime.now()
+    
+    # Защита от спама (2 секунды)
+    if uid in last_messages and (now - last_messages[uid]).total_seconds() < 2: return
+    last_messages[uid] = now
+
+    text = message.content.lower()
+    user_memory[uid] = message.content[:50] # Запоминаем 50 символов
+
+    # Интерактив без команд
+    if any(w in text for w in ["привет", "ку", "здравствуй", "хей", "здравия"]):
+        await message.channel.send(random.choice(["Привет! 🦊", "Здравствуй! Я так рада тебя видеть.", "Тяв! Приветик!"]))
+    elif "как дела" in text:
+        msg = "У меня всё отлично! Сижу, жду вкусняшек..."
+        if hunger.get(uid, 0) > 70: msg = "Я немного проголодалась, но в целом всё хорошо!"
+        await message.channel.send(msg)
+
+# ======================================================
+# 7. ЗАПУСК
+# ======================================================
+
+# Обязательно добавь переменную DISCORD_TOKEN в настройки Render (Environment Variables)!
+TOKEN = os.getenv("DISCORD_TOKEN")
+
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("!!! ОШИБКА: ТОКЕН НЕ НАЙДЕН !!!")
