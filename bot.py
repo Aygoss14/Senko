@@ -5,7 +5,7 @@ import datetime
 import os
 import asyncio
 
-DISCORD_TOKEN = os.environ('DISCORD_TOKEN')
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # =====================
 # INTENTS
@@ -310,5 +310,5 @@ async def помощь(ctx):
 # =====================
 # ЗАПУСК
 # =====================
-TOKEN = os.getenv("DISCORD_TOKEN")
+
 bot.run(DISCORD_TOKEN)
