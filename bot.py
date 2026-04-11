@@ -308,5 +308,5 @@ async def помощь(ctx):
 # =====================
 # ЗАПУСК
 # =====================
-TOKEN = os.getenv("discordkey")
+TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(DISCORD_TOKEN)
