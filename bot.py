@@ -82,15 +82,19 @@ def hunger_state(value: int):
 # =====================
 # ТИК
 # =====================
+started = False
+
 @bot.event
 async def on_ready():
+    global started
     print(f"Бот запущен как {bot.user}")
 
-    if not hunger_tick.is_running():
-        hunger_tick.start()
+    if started:
+        return
+    started = True
 
-    if not send_daily_fact.is_running():
-        send_daily_fact.start()
+    hunger_tick.start()
+    send_daily_fact.start()
         
 food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
 
