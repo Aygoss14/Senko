@@ -123,13 +123,13 @@ async def угадать(ctx, guess):
 # 🟣 ИГРА 2: КОРМИ СЕНКО
 # =====================
 @bot.command()
-async def покормить(ctx, food=""):
+async def покормить(ctx, *, food=""):
     if ctx.author.id not in hunger:
         hunger[ctx.author.id] = 50
 
-    good_food = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
+    food = food.lower().strip()
 
-    if food.lower() in good_food:
+    if food in food_list:
         hunger[ctx.author.id] -= 10
         msg = "🦊 Мм... вкусно... спасибо 🌸"
     else:
@@ -139,9 +139,9 @@ async def покормить(ctx, food=""):
     await ctx.send(
         f"{msg}\n"
         f"🍽️ Голод Сенко: {hunger[ctx.author.id]}\n\n"
-        "📌 Поддерживаемая еда: ягоды, печенье, молоко, рыба, тофу"
+        f"📌 Поддерживаемая еда: {', '.join(food_list)}"
     )
-
+    
 # =====================
 # 🔵 ИГРА 3: ПРАВДА / ЛОЖЬ
 # =====================
