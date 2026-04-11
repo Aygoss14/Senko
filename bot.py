@@ -63,6 +63,7 @@ holiday_facts = {
 emotion_game = {}
 truth_game = {}
 hunger = {}
+last_hunger_tick = datetime.datetime.now()
 
 # =====================
 # ⏰ ФАКТ В 9:00
