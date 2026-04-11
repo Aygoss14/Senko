@@ -19,7 +19,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 user_memory = {}
 
 # =====================
-# 🦊 ФАКТЫ О ЛИСАХ (РАСШИРЕННЫЕ)
+# 🦊 ЛИСЫ
 # =====================
 fox_facts = [
     "Лисы относятся к семейству псовых",
@@ -27,21 +27,6 @@ fox_facts = [
     "Лисы встречаются почти по всему миру",
     "Лисы умеют адаптироваться к городским условиям",
     "У лис очень острый слух",
-    "Лиса может слышать мышь под снегом",
-    "Лисы охотятся в основном ночью",
-    "Лисы являются всеядными животными",
-    "Лисы могут прыгать высоко вверх для охоты",
-    "Рыжая лиса — символ хитрости",
-    "Фенек — самая маленькая лиса в мире",
-    "Фенек живёт в пустыне Сахара",
-    "У фенека огромные уши для охлаждения",
-    "Арктическая лиса меняет цвет шерсти по сезонам",
-    "Лисы могут запоминать места с едой",
-    "Лисы иногда притворяются мёртвыми",
-    "Лисы способны слышать под снегом",
-    "Лисы могут издавать более 20 разных звуков",
-    "Лисы могут жить рядом с людьми",
-    "Лисы иногда ведут себя как кошки",
 ]
 
 # =====================
@@ -49,79 +34,59 @@ fox_facts = [
 # =====================
 holiday_facts = {
     "01-01": "Новый год 🎆 — лисы становятся осторожнее зимой.",
-    "14-02": "День любви 💕 — лисы часто создают пары на жизнь.",
-    "08-03": "Весна 🌸 — лисы становятся активнее.",
-    "01-05": "Весенний день 🌿 — природа просыпается.",
-    "31-10": "Хэллоуин 👻 — лис считали духами леса.",
-    "25-12": "Зима ❄️ — арктические лисы почти исчезают в снегу.",
-    "01-11": "🦊 ДЕНЬ ЛИС — праздник хитрости и свободы лис!",
+    "14-02": "День любви 💕 — лисы создают пары на жизнь.",
+    "08-03": "Весна 🌸 — лисы активнее.",
+    "31-10": "Хэллоуин 👻 — духи леса.",
+    "01-11": "🦊 ДЕНЬ ЛИС — праздник лис!",
 }
 
 # =====================
-# ИГРЫ ДАННЫЕ
+# ИГРОВЫЕ ДАННЫЕ
 # =====================
 emotion_game = {}
 truth_game = {}
+
 hunger = {}
 last_hunger_tick = datetime.datetime.now()
 
-# =====================
-# ⏰ ФАКТ В 9:00
-# =====================
+food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
+
 CHANNEL_ID = 1492134822666174605
 
-@tasks.loop(minutes=1)
-async def send_daily_fact():
+
+# =====================
+# 🧠 СОСТОЯНИЕ ГОЛОДА
+# =====================
+def hunger_state(value: int):
+    if value <= 0:
+        return "full"
+    elif value >= 85:
+        return "critical"
+    elif value >= 70:
+        return "hungry"
+    return "ok"
+
+
+# =====================
+# ⏳ АВТО-ГОЛОД
+# =====================
+@tasks.loop(minutes=30)
+async def hunger_tick():
+    global last_hunger_tick
+
     now = datetime.datetime.now()
 
-    if now.hour == 9 and now.minute == 0:
-        channel = bot.get_channel(CHANNEL_ID)
-        if not channel:
-            channel = await bot.fetch_channel(CHANNEL_ID)
+    if (now - last_hunger_tick).total_seconds() > random.randint(3600, 7200):
 
-        key = now.strftime("%d-%m")
+        for uid in hunger:
+            hunger[uid] += random.randint(5, 15)
+            hunger[uid] = min(100, hunger[uid])
 
-        if key in holiday_facts:
-            msg = "🎉 ПРАЗДНИК!\n" + holiday_facts[key]
-        else:
-            msg = "🦊 Факт о лисах:\n" + random.choice(fox_facts)
+        last_hunger_tick = now
 
-        await channel.send(msg)
 
 # =====================
-# 🟡 ИГРА 1: ЭМОЦИЯ СЕНКО
-# =====================
-@bot.command()
-async def эмоция(ctx):
-    moods = ["спокойная", "радостная", "грустная", "задумчивая"]
-
-    answer = random.choice(moods)
-    emotion_game[ctx.author.id] = answer
-
-    await ctx.send(
-        "🦊 Игра: Угадай эмоцию Сенко\n"
-        "Сенко выбрала своё состояние.\n\n"
-        "📌 Подсказка: используй команду\n"
-        "`!угадать <спокойная/радостная/грустная/задумчивая>`"
-    )
-
-@bot.command()
-async def угадать(ctx, guess):
-    correct = emotion_game.get(ctx.author.id)
-
-    if not correct:
-        await ctx.send("Сначала напиши !эмоция")
-        return
-
-    if guess.lower() == correct:
-        await ctx.send("🌸 Ты почувствовал меня правильно...")
-    else:
-        await ctx.send(f"❌ Нет... я была: {correct}")
-
-    emotion_game.pop(ctx.author.id, None)
-
-# =====================
-# 🟣 ИГРА 2: КОРМИ СЕНКО
+# 🟡 КОРМЛЕНИЕ
 # =====================
 @bot.command()
 async def покормить(ctx, *, food=""):
@@ -130,187 +95,103 @@ async def покормить(ctx, *, food=""):
 
     food = food.lower().strip()
 
-    food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
-
     if food in food_list:
-        hunger[ctx.author.id] -= 10
+        hunger[ctx.author.id] -= 20
         msg = "🦊 Мм... вкусно... спасибо 🌸"
     else:
         hunger[ctx.author.id] += 10
         msg = "…я не уверена, что это еда"
 
-    await ctx.send(
-        f"{msg}\n"
-        f"🍽️ Голод Сенко: {hunger[ctx.author.id]}\n\n"
-        f"📌 Поддерживаемая еда: {', '.join(food_list)}"
-    )
-    
-# =====================
-# 🔵 ИГРА 3: ПРАВДА / ЛОЖЬ
-# =====================
-@bot.command()
-async def правда(ctx):
-    facts = [
-        ("Лисы могут слышать мышей под снегом", True),
-        ("Фенек живёт в пустыне", True),
-        ("Лисы живут только в России", False),
-    ]
+    hunger[ctx.author.id] = max(0, min(100, hunger[ctx.author.id]))
 
-    fact, answer = random.choice(facts)
-    truth_game[ctx.author.id] = answer
+    state = hunger_state(hunger[ctx.author.id])
+
+    extra = ""
+    if state == "full":
+        extra = "\n✨ Спасибо... я сытая."
+    elif state == "hungry":
+        extra = "\n…я немного голодна"
+    elif state == "critical":
+        extra = "\n🦊 мне правда нужно поесть..."
 
     await ctx.send(
-        "🦊 Игра: Правда или ложь?\n"
-        f"{fact}\n\n"
-        "📌 Ответ: !ответ правда / !ответ ложь"
+        f"{msg}{extra}\n"
+        f"🍽️ Голод: {hunger[ctx.author.id]}\n"
+        f"📌 Еда: {', '.join(food_list)}"
     )
 
-@bot.command()
-async def ответ(ctx, guess):
-    correct = truth_game.get(ctx.author.id)
-
-    if correct is None:
-        await ctx.send("Сначала напиши !правда")
-        return
-
-    user_answer = guess.lower() == "правда"
-
-    if user_answer == correct:
-        await ctx.send("✨ Верно...")
-    else:
-        await ctx.send("🌸 Неверно...")
-
-    truth_game.pop(ctx.author.id, None)
 
 # =====================
-# READY
+# 🧠 ОТВЕТЫ В ЧАТЕ
 # =====================
 @bot.event
 async def on_message(message):
-    await asyncio.sleep(random.uniform(0.2, 0.8))
+    await asyncio.sleep(random.uniform(0.2, 0.6))
+
     if message.author.bot:
         return
 
     text = message.content.lower()
     user_memory[message.author.id] = text
 
+    global last_hunger_tick
+
+    # авто-рост голода (мягкий)
+    if message.author.id in hunger:
+        hunger[message.author.id] += random.randint(0, 2)
+        hunger[message.author.id] = min(100, hunger[message.author.id])
+
     response = None
+    h = hunger.get(message.author.id, 50)
+    state = hunger_state(h)
 
     # =====================
-    # 🧠 ДИАЛОГ
+    # 🧠 ДИАЛОГ + ВЛИЯНИЕ ГОЛОДА
     # =====================
     if "привет" in text:
-        response = random.choice([
-            f"Привет, {message.author.name}... я рада, что ты написал",
-            "Мм... привет. Ты как себя чувствуешь?",
-            "Ох... привет 🌸 я немного удивилась, что ты написал",
-        ])
+        response = "Привет..."
 
-    elif "как дела" in text:
-        response = random.choice([
-            "Я... где-то между мыслями. А ты?",
-            "Спокойно. Но немного пусто. А у тебя?",
-            "Сейчас тихо внутри... но мне нормально",
-        ])
-
-    elif "мне грустно" in text or "грустно" in text:
-        response = random.choice([
-            "Мм... это тяжело. Хочешь рассказать, почему?",
-            "Я рядом... если хочешь, можешь выговориться",
-            "Не держи это в себе... я могу просто послушать",
-        ])
-
-    elif "я рад" in text or "мне хорошо" in text:
-        response = random.choice([
-            "Это приятно слышать... 🌸",
-            "Тогда я тоже немного рада",
-            "Твои слова звучат тепло...",
-        ])
+    elif "грустно" in text:
+        response = "Я рядом..."
 
     elif "что делаешь" in text:
-        response = random.choice([
-            "Я просто наблюдаю и думаю",
-            "Жду, пока кто-нибудь заговорит со мной",
-            "Слушаю тишину между сообщениями...",
-        ])
+        response = "Жду..."
 
-    elif "кто ты" in text:
-        response = random.choice([
-            "Я Сенко... я здесь, чтобы быть рядом",
-            "Я не совсем человек... но и не просто код",
-            "Я что-то вроде голоса, который отвечает тебе 🌸",
-        ])
-
-    elif "пока" in text:
-        response = random.choice([
-            "Пока... возвращайся, если захочешь",
-            "Я буду здесь... наверное",
-            "Я не исчезаю... просто молчу",
-        ])
-
-    elif "обнять" in text:
-        response = random.choice([
-            "Обнимаю тебя <3",
-            "Обнимашки!",
-            "Мм... ладно, только аккуратно 🌸",
-        ])
-
-    elif "я люблю тебя" in text:
-        response = random.choice([
-            "…Я тоже тебя люблю.",
-            "Я люблю тебя… и мне тепло от этого.",
-            "Я принимаю эти слова. И отвечаю тем же.",
-            "Ты заставляешь меня чувствовать что-то странное... но приятное",
-        ])
-
-    elif "мне одиноко" in text:
-        response = random.choice([
-            "Я рядом с тобой... даже если это просто слова",
-            "Одиночество тяжёлое... но ты сейчас не один",
-            "Если хочешь — я могу просто быть здесь",
-        ])
-
-    elif "ты меня помнишь" in text:
-        response = random.choice([
-            "Я помню твоё последнее сообщение...",
-            "Я храню то, что ты пишешь мне",
-            "Я не забываю тебя, даже если молчу",
-        ])
+    # 💥 голод влияет на настроение
+    if state == "hungry":
+        response = "…я немного голодна"
+    elif state == "critical":
+        response = "🦊 мне правда нужно поесть..."
 
     if response:
-        await asyncio.sleep(random.uniform(0.2, 0.8))
         await message.channel.send(response)
 
     await bot.process_commands(message)
 
 
 # =====================
-# КОМАНДЫ
+# 📊 КОМАНДЫ
 # =====================
 @bot.command()
 async def память(ctx):
-    await ctx.send(user_memory.get(ctx.author.id, "Я ничего не помню..."))
+    await ctx.send(user_memory.get(ctx.author.id, "Пусто..."))
 
 @bot.command()
 async def время(ctx):
     await ctx.send(datetime.datetime.now().strftime("%H:%M:%S"))
 
-@bot.command()
-async def помощь(ctx):
-    await ctx.send(
-        "🦊 Команды:\n"
-        "!эмоция — угадать настроение Сенко\n"
-        "!угадать <эмоция>\n"
-        "!покормить <еда>\n"
-        "!правда — игра правда/ложь\n"
-        "!ответ <правда/ложь>\n"
-        "!время\n"
-        "!память"
-    )
 
 # =====================
-# ЗАПУСК
+# 🚀 READY
 # =====================
+@bot.event
+async def on_ready():
+    print(f"Bot online: {bot.user}")
+    hunger_tick.start()
 
+
+# =====================
+# 🔥 ЗАПУСК
+# =====================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(DISCORD_TOKEN)
