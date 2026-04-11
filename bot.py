@@ -87,6 +87,7 @@ started = False
 @bot.event
 async def on_ready():
     global started
+
     print(f"Бот запущен как {bot.user}")
 
     if started:
