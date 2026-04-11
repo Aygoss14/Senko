@@ -5,6 +5,8 @@ import datetime
 import os
 import asyncio
 
+DISCORD_TOKEN = os.environ('DISCORD_TOKEN')
+
 # =====================
 # INTENTS
 # =====================
