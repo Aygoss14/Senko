@@ -82,17 +82,17 @@ def hunger_state(value: int):
 # =====================
 # ТИК
 # =====================
-started = False
+bot_started = False
 
 @bot.event
 async def on_ready():
-    global started
+    global bot_started
 
     print(f"Бот запущен как {bot.user}")
 
-    if started:
+    if bot_started:
         return
-    started = True
+    bot_started = True
 
     hunger_tick.start()
     send_daily_fact.start()
