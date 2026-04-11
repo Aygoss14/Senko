@@ -95,13 +95,14 @@ async def on_ready():
 food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
 
 # =====================
-# 📉 АВТО-ГОЛОД (СТАБИЛЬНЫЙ)
+# 📉 АВТО-ГОЛОД
 # =====================
 @tasks.loop(minutes=60)
 async def hunger_tick():
     for uid in list(hunger.keys()):
         hunger[uid] += random.randint(2, 8)
         hunger[uid] = min(100, hunger[uid])
+
 
 # =====================
 # ⏰ ФАКТЫ
@@ -119,6 +120,21 @@ async def send_daily_fact():
 
         msg = holiday_facts.get(key, "🦊 Факт: " + random.choice(fox_facts))
         await channel.send(msg)
+
+
+# =====================
+# 🟢 ON READY (ИСПРАВЛЕННЫЙ)
+# =====================
+@bot.event
+async def on_ready():
+    print(f"Бот запущен как {bot.user}")
+
+    # защита от двойного запуска
+    if not hunger_tick.is_running():
+        hunger_tick.start()
+
+    if not send_daily_fact.is_running():
+        send_daily_fact.start()
 
 # =====================
 # 🟡 КОРМЛЕНИЕ
