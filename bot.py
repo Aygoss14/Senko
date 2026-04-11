@@ -43,6 +43,7 @@ fox_facts = [
     "Лисы могут жить рядом с людьми",
     "Лисы иногда ведут себя как кошки",
 ]
+
 # =====================
 # 🎉 ПРАЗДНИКИ
 # =====================
@@ -64,8 +65,9 @@ CHANNEL_ID = 1492134822666174605
 emotion_game = {}
 truth_game = {}
 hunger = {}
-
 last_messages = {}
+
+food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
 
 # =====================
 # ГОЛОД СТАТУС
@@ -80,7 +82,7 @@ def hunger_state(value: int):
     return "ok"
 
 # =====================
-# ON READY (ФИКС)
+# ON READY
 # =====================
 _started = False
 
@@ -98,11 +100,9 @@ async def on_ready():
 
     if not send_daily_fact.is_running():
         send_daily_fact.start()
-        
-food_list = ["ягоды", "печенье", "молоко", "рыба", "тофу"]
 
 # =====================
-# ФАКТЫ
+# ⏰ ФАКТ ДНЯ
 # =====================
 @tasks.loop(minutes=1)
 async def send_daily_fact():
@@ -110,33 +110,25 @@ async def send_daily_fact():
 
     if now.hour == 9 and now.minute == 0:
         channel = bot.get_channel(CHANNEL_ID)
+
         if not channel:
-            return
+            try:
+                channel = await bot.fetch_channel(CHANNEL_ID)
+            except:
+                return
 
         key = now.strftime("%d-%m")
-        msg = holiday_facts.get(key, random.choice(fox_facts))
-        await channel.send(msg)
-        
-# =====================
-# ⏰ ФАКТЫ
-# =====================
-@tasks.loop(minutes=1)
-async def send_daily_fact():
-    now = datetime.datetime.now()
-
-    if now.hour == 9 and now.minute == 0:
-        channel = bot.get_channel(CHANNEL_ID)
-        if not channel:
-            channel = await bot.fetch_channel(CHANNEL_ID)
-
-        key = now.strftime("%d-%m")
-
-        msg = holiday_facts.get(
-            key,
-            "🦊 Факт: " + random.choice(fox_facts)
-        )
+        msg = holiday_facts.get(key, "🦊 Факт: " + random.choice(fox_facts))
 
         await channel.send(msg)
+
+# =====================
+# 🔁 ТИК ГОЛОДА
+# =====================
+@tasks.loop(minutes=5)
+async def hunger_tick():
+    for user_id in hunger:
+        hunger[user_id] = min(100, hunger[user_id] + 2)
 
 # =====================
 # 🟡 КОРМЛЕНИЕ
@@ -169,7 +161,7 @@ async def покормить(ctx, *, food=""):
     await ctx.send(f"{msg}{extra}\n🍽️ Голод: {hunger[ctx.author.id]}")
 
 # =====================
-# 🔵 ПРАВДА / ЛОЖЬ (РАСШИРЕНО)
+# 🔵 ПРАВДА / ЛОЖЬ
 # =====================
 @bot.command()
 async def правда(ctx):
@@ -210,7 +202,7 @@ async def ответ(ctx, guess):
     truth_game.pop(ctx.author.id, None)
 
 # =====================
-# 🧠 ON_MESSAGE (ИСПРАВЛЕН ДУБЛЬ)
+# 🧠 ON_MESSAGE
 # =====================
 @bot.event
 async def on_message(message):
@@ -220,7 +212,6 @@ async def on_message(message):
 
     now = datetime.datetime.now()
 
-    # ❗ защита от дублей (ВАЖНО)
     last = last_messages.get(message.author.id)
     if last and (now - last).total_seconds() < 2:
         return
@@ -241,14 +232,11 @@ async def on_message(message):
         response = "Привет... я рада что ты здесь"
     elif "как дела" in text:
         response = "Я спокойна... а ты?"
-
     elif "грустно" in text:
         response = "Я рядом..."
-
     elif "кто ты" in text:
         response = "Я Сенко..."
 
-    # реакция голода
     if response:
         if state == "hungry":
             response += "\n…я немного голодна"
@@ -274,7 +262,7 @@ async def время(ctx):
 
 @bot.command()
 async def помощь(ctx):
-    await ctx.send("!правда !покормить !время !память !эмоция")
+    await ctx.send("!правда !покормить !время !память")
 
 # =====================
 # ЗАПУСК
