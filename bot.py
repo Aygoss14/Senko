@@ -55,6 +55,29 @@ holiday_facts = {
 }
 
 # =====================
+# ⏰ ФАКТ В 9:00
+# =====================
+CHANNEL_ID = 1492134822666174605
+
+@tasks.loop(minutes=1)
+async def send_daily_fact():
+    now = datetime.datetime.now()
+
+    if now.hour == 9 and now.minute == 0:
+        channel = bot.get_channel(CHANNEL_ID)
+        if not channel:
+            channel = await bot.fetch_channel(CHANNEL_ID)
+
+        key = now.strftime("%d-%m")
+
+        if key in holiday_facts:
+            msg = "🎉 ПРАЗДНИК!\n" + holiday_facts[key]
+        else:
+            msg = "🦊 Факт о лисах:\n" + random.choice(fox_facts)
+
+        await channel.send(msg)
+        
+# =====================
 # ИГРОВЫЕ ДАННЫЕ
 # =====================
 emotion_game = {}
