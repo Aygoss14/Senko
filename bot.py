@@ -139,20 +139,6 @@ async def send_daily_fact():
         await channel.send(msg)
 
 # =====================
-# 🟢 ON READY (ИСПРАВЛЕННЫЙ)
-# =====================
-@bot.event
-async def on_ready():
-    print(f"Бот запущен как {bot.user}")
-
-    # защита от двойного запуска
-    if not hunger_tick.is_running():
-        hunger_tick.start()
-
-    if not send_daily_fact.is_running():
-        send_daily_fact.start()
-
-# =====================
 # 🟡 КОРМЛЕНИЕ
 # =====================
 @bot.command()
