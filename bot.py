@@ -749,6 +749,9 @@ FOX_MEDIA = {
     "удивление": [],
     "обида": [],
     "танец": [],
+    "грусть": ["https://media.tenor.com/HoSYZR66fsQAAAAM/senko-light.gif",
+              "https://media.tenor.com/Lsxo6rTUoSYAAAAM/senko-sewayaki-kitsune-no-senko-san.gif"
+    ],
     "gif": []
 }
 
@@ -814,6 +817,7 @@ async def лиса_помощь(ctx):
             "`!лиса удивление` — удивление\n"
             "`!лиса обида` — обида\n"
             "`!лиса танец` — танец\n"
+            "`!лиса грусть` — грусть\n"
             "`!лиса gif` — случайная GIF"
         ),
         color=0xff8c00
