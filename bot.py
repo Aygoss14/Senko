@@ -4,6 +4,9 @@ import random
 import datetime
 import os
 import asyncio
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ======================================================
 # 1. НАСТРОЙКИ, ИНТЕНТЫ И ГЛОБАЛЬНЫЕ ДАННЫЕ
