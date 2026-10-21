@@ -5,12 +5,13 @@ import random
 import datetime
 import os
 import asyncio
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # ======================================================
-# 1. НАСТРОЙКИ И ГЛОБАЛЬНЫЕ ДАННЫЕ
+# 1. НАСТРОЙКИ
 # ======================================================
 
 intents = discord.Intents.default()
@@ -18,34 +19,18 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ID основного канала Сенкосан
+# Основной канал Сенкосан
 CHANNEL_ID = 1492134822666174605
 
-# Настройки самостоятельной активности
+# Самостоятельная активность
 FOX_COOLDOWN_MINUTES = 30
 FOX_ACTION_CHANCE = 0.25
 
-# Память и игры
-user_memory = {}
-last_fact_date = None
-truth_game = {}
-mood_game = {}
-hunger = {}
-last_messages = {}
-
-# Коллекции и экономика
-inventories = {}       # {user_id: [items]}
-balances = {}          # {user_id: leaves}
-is_searching = False
-
-# Защита от повторного поиска
-searching_users = set()
-
-# Время последнего самостоятельного сообщения
-last_fox_action = None
+# Файл постоянной памяти
+DATA_FILE = "data.json"
 
 # ======================================================
-# 2. ПРЕДМЕТЫ ДЛЯ ПОИСКА
+# 2. ПРЕДМЕТЫ И МАГАЗИН
 # ======================================================
 
 ITEMS = {
@@ -69,10 +54,6 @@ ITEMS = {
     ]
 }
 
-# ======================================================
-# 3. МАГАЗИН
-# ======================================================
-
 SHOP_ITEMS = {
     "🍪 Печенье": 10,
     "🌸 Цветок": 25,
@@ -81,19 +62,12 @@ SHOP_ITEMS = {
 }
 
 FOOD_LIST = [
-    "ягоды",
-    "печенье",
-    "молоко",
-    "рыба",
-    "тофу",
-    "мясо",
-    "хлеб",
-    "грибы",
-    "яблоко"
+    "ягоды", "печенье", "молоко", "рыба",
+    "тофу", "мясо", "хлеб", "грибы", "яблоко"
 ]
 
 # ======================================================
-# 4. ФРАЗЫ И ФАКТЫ
+# 3. ФРАЗЫ, ФАКТЫ И ДЕЙСТВИЯ
 # ======================================================
 
 MOODS = {
@@ -125,18 +99,18 @@ MOODS = {
 }
 
 FOX_FACTS = [
-    "Лисы слышат мышь под метром снега.",
-    "Фенек — самая маленькая лиса (1.5 кг).",
-    "Зрачки лисы вертикальные, как у кошек.",
-    "Лиса может прыгать на 2 метра вверх.",
-    "В Японии лиса — символ мудрости."
+    "Лисы обладают очень острым слухом.",
+    "Фенек — самая маленькая разновидность лис.",
+    "У лис вертикальные зрачки.",
+    "Лисы используют хвост для баланса.",
+    "В японском фольклоре кицунэ — магические лисы."
 ]
 
 TRUTH_OR_DARE_FACTS = [
-    ("Лисы слышат мышей за 30 метров под снегом", True),
-    ("Фенек живёт в Сибири", False),
-    ("Лисы могут бегать 50 км/ч", True),
-    ("Зрачки лисы круглые", False)
+    ("Лисы обладают острым слухом", True),
+    ("Фенек — самая крупная лиса в мире", False),
+    ("Лисы используют хвост для баланса", True),
+    ("У всех лис зрачки круглые", False)
 ]
 
 FOX_ACTIONS = [
@@ -144,54 +118,236 @@ FOX_ACTIONS = [
     "✨ *Лиса чистит свою шубку.*",
     "🐾 *Лиса оставила отпечаток лапки.*",
     "📦 *Лиса залезла в коробку.*",
-    "👂 *Ушки лисы дернулись.*"
+    "👂 *Ушки лисы дернулись.*",
+    "🌿 *Лиса выглянула из кустов.*",
+    "💤 *Лиса сладко зевнула.*",
+    "🍃 *Лиса гоняется за упавшим листиком.*"
 ]
 
 # ======================================================
-# 5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# 4. ПЕРЕМЕННЫЕ ПАМЯТИ
 # ======================================================
 
-def get_hunger_state(value: int):
+inventories = {}
+balances = {}
+hunger = {}
+
+# Последнее обычное сообщение пользователя
+user_memory = {}
+
+# Дата первого знакомства и количество замеченных сообщений
+first_seen = {}
+message_counts = {}
+
+# Время последних сообщений
+last_messages = {}
+
+# Состояния игр в текущей сессии
+truth_game = {}
+mood_game = {}
+searching_users = set()
+
+# Время последнего факта дня
+last_fact_date = None
+
+# Время последнего самостоятельного сообщения
+last_fox_action = None
+
+# ======================================================
+# 5. ЗАГРУЗКА И СОХРАНЕНИЕ ПАМЯТИ
+# ======================================================
+
+def load_memory():
+    """Загружает память из JSON-файла."""
+
+    if not os.path.exists(DATA_FILE):
+        print("🦊 Файл памяти пока отсутствует. Создаём новую память.")
+        return {}
+
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            raise ValueError("Корневые данные должны быть объектом JSON.")
+
+        print("🧠 Память Сенкосан успешно загружена!")
+        return data
+
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"⚠️ Не удалось загрузить память: {error}")
+        print("⚠️ Файл не перезаписывается автоматически при ошибке.")
+        return {}
+
+
+def save_memory():
+    """Сохраняет текущее состояние на диск."""
+
+    data = {
+        "inventories": inventories,
+        "balances": balances,
+        "hunger": hunger,
+        "user_memory": user_memory,
+        "first_seen": first_seen,
+        "message_counts": message_counts,
+        "last_messages": {
+            str(uid): date.isoformat()
+            for uid, date in last_messages.items()
+        },
+        "last_fact_date": last_fact_date,
+        "last_fox_action": (
+            last_fox_action.isoformat()
+            if last_fox_action else None
+        )
+    }
+
+    temp_file = DATA_FILE + ".tmp"
+
+    try:
+        with open(temp_file, "w", encoding="utf-8") as file:
+            json.dump(
+                data,
+                file,
+                ensure_ascii=False,
+                indent=2
+            )
+            file.flush()
+            os.fsync(file.fileno())
+
+        # Атомарная замена старого файла новым
+        os.replace(temp_file, DATA_FILE)
+
+    except (OSError, TypeError, ValueError) as error:
+        print(f"⚠️ Ошибка сохранения памяти: {error}")
+
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except OSError:
+            pass
+
+
+def restore_memory():
+    """Восстанавливает данные из файла."""
+
+    global inventories
+    global balances
+    global hunger
+    global user_memory
+    global first_seen
+    global message_counts
+    global last_messages
+    global last_fact_date
+    global last_fox_action
+
+    data = load_memory()
+
+    inventories = {
+        int(uid): items
+        for uid, items in data.get("inventories", {}).items()
+        if isinstance(items, list)
+    }
+
+    balances = {
+        int(uid): amount
+        for uid, amount in data.get("balances", {}).items()
+        if isinstance(amount, (int, float)) and amount >= 0
+    }
+
+    hunger = {
+        int(uid): max(0, min(100, amount))
+        for uid, amount in data.get("hunger", {}).items()
+        if isinstance(amount, (int, float))
+    }
+
+    user_memory = {
+        int(uid): message
+        for uid, message in data.get("user_memory", {}).items()
+        if isinstance(message, str)
+    }
+
+    first_seen = {
+        int(uid): date
+        for uid, date in data.get("first_seen", {}).items()
+        if isinstance(date, str)
+    }
+
+    message_counts = {
+        int(uid): count
+        for uid, count in data.get("message_counts", {}).items()
+        if isinstance(count, int) and count >= 0
+    }
+
+    last_messages = {}
+
+    for uid, date in data.get("last_messages", {}).items():
+        try:
+            last_messages[int(uid)] = (
+                datetime.datetime.fromisoformat(date)
+            )
+        except (ValueError, TypeError):
+            continue
+
+    last_fact_date = data.get("last_fact_date")
+
+    saved_action = data.get("last_fox_action")
+
+    try:
+        last_fox_action = (
+            datetime.datetime.fromisoformat(saved_action)
+            if saved_action else None
+        )
+    except (ValueError, TypeError):
+        last_fox_action = None
+
+
+restore_memory()
+
+
+# ======================================================
+# 6. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ======================================================
+
+def get_balance(uid):
+    return balances.get(uid, 0)
+
+
+def get_inventory(uid):
+    return inventories.setdefault(uid, [])
+
+
+def get_hunger_state(value):
     if value <= 15:
         return "сытая ✨"
     elif value >= 85:
         return "очень голодная 🆘"
+
     return "в норме 👍"
 
 
-def get_balance(uid: int):
-    return balances.get(uid, 0)
-
-
-def get_inventory(uid: int):
-    return inventories.setdefault(uid, [])
-
-
 # ======================================================
-# 6. САМОСТОЯТЕЛЬНАЯ АКТИВНОСТЬ СЕНКОСАН
+# 7. САМОСТОЯТЕЛЬНАЯ АКТИВНОСТЬ
 # ======================================================
 
 @tasks.loop(minutes=5)
 async def fox_lifecycle():
-    """
-    Проверяет возможность самостоятельного действия.
-    Минимальный интервал между сообщениями — 30 минут.
-    После окончания интервала шанс сообщения — 25%.
-    """
+    """Сенкосан иногда самостоятельно проявляет активность."""
 
     global last_fox_action
 
     channel = bot.get_channel(CHANNEL_ID)
 
     if channel is None:
-        return
+        try:
+            channel = await bot.fetch_channel(CHANNEL_ID)
+        except (discord.HTTPException, discord.NotFound):
+            print("⚠️ Не удалось найти канал Сенкосан.")
+            return
 
     now = datetime.datetime.now()
 
     if last_fox_action is not None:
-        elapsed = (
-            now - last_fox_action
-        ).total_seconds() / 60
+        elapsed = (now - last_fox_action).total_seconds() / 60
 
         if elapsed < FOX_COOLDOWN_MINUTES:
             return
@@ -199,12 +355,21 @@ async def fox_lifecycle():
     if random.random() > FOX_ACTION_CHANCE:
         return
 
+    previous_action = last_fox_action
     last_fox_action = now
+
+    # Запоминаем действие перед отправкой сообщения
+    save_memory()
 
     try:
         await channel.send(random.choice(FOX_ACTIONS))
+
     except discord.HTTPException as error:
-        print(f"Не удалось отправить действие лисы: {error}")
+        print(f"⚠️ Не удалось отправить сообщение: {error}")
+
+        # Если сообщение не отправлено, восстанавливаем cooldown
+        last_fox_action = previous_action
+        save_memory()
 
 
 @fox_lifecycle.before_loop
@@ -213,13 +378,15 @@ async def before_fox_lifecycle():
 
 
 # ======================================================
-# 7. ГОЛОД
+# 8. ГОЛОД
 # ======================================================
 
 @tasks.loop(hours=1)
 async def hunger_tick():
     for uid in list(hunger.keys()):
         hunger[uid] = min(100, hunger[uid] + 8)
+
+    save_memory()
 
 
 @hunger_tick.before_loop
@@ -228,7 +395,7 @@ async def before_hunger_tick():
 
 
 # ======================================================
-# 8. ФАКТ ДНЯ
+# 9. ФАКТ ДНЯ
 # ======================================================
 
 @tasks.loop(minutes=1)
@@ -238,21 +405,31 @@ async def daily_fact_task():
     now = datetime.datetime.now()
     today = now.strftime("%d-%m")
 
-    if now.hour == 9 and now.minute == 0:
-        if last_fact_date == today:
+    if now.hour != 9 or now.minute != 0:
+        return
+
+    if last_fact_date == today:
+        return
+
+    channel = bot.get_channel(CHANNEL_ID)
+
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(CHANNEL_ID)
+        except discord.HTTPException:
             return
 
-        channel = bot.get_channel(CHANNEL_ID)
+    try:
+        await channel.send(
+            f"☀️ **Лисий факт дня:** "
+            f"{random.choice(FOX_FACTS)}"
+        )
 
-        if channel is not None:
-            try:
-                await channel.send(
-                    f"☀️ **Лисий факт дня:** "
-                    f"{random.choice(FOX_FACTS)}"
-                )
-                last_fact_date = today
-            except discord.HTTPException as error:
-                print(f"Ошибка отправки факта: {error}")
+        last_fact_date = today
+        save_memory()
+
+    except discord.HTTPException as error:
+        print(f"⚠️ Ошибка отправки факта дня: {error}")
 
 
 @daily_fact_task.before_loop
@@ -261,14 +438,12 @@ async def before_daily_fact_task():
 
 
 # ======================================================
-# 9. ПОИСК ПРЕДМЕТОВ
+# 10. ПОИСК ПРЕДМЕТОВ
 # ======================================================
 
 @bot.command(name="поиск")
 @commands.cooldown(1, 10, commands.BucketType.user)
 async def поиск(ctx):
-    """Отправляет Сенкосан на поиск."""
-
     uid = ctx.author.id
 
     if uid in searching_users:
@@ -286,12 +461,12 @@ async def поиск(ctx):
 
         await asyncio.sleep(5)
 
-        rarity_roll = random.random()
+        roll = random.random()
 
-        if rarity_roll < 0.1:
+        if roll < 0.1:
             rarity = "Mythical"
             reward = 50
-        elif rarity_roll < 0.4:
+        elif roll < 0.4:
             rarity = "Rare"
             reward = 20
         else:
@@ -302,6 +477,8 @@ async def поиск(ctx):
 
         get_inventory(uid).append(item)
         balances[uid] = get_balance(uid) + reward
+
+        save_memory()
 
         await msg.edit(
             content=(
@@ -319,8 +496,9 @@ async def поиск(ctx):
 async def поиск_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         seconds = max(1, int(error.retry_after))
+
         await ctx.send(
-            f"🦊 *Лиса ещё отдыхает.* "
+            f"🦊 *Лиса отдыхает.* "
             f"Попробуй снова через {seconds} сек."
         )
     else:
@@ -328,7 +506,7 @@ async def поиск_error(ctx, error):
 
 
 # ======================================================
-# 10. РЮКЗАК
+# 11. РЮКЗАК
 # ======================================================
 
 @bot.command(name="рюкзак")
@@ -363,7 +541,7 @@ async def рюкзак(ctx):
 
 
 # ======================================================
-# 11. МАГАЗИН
+# 12. МАГАЗИН
 # ======================================================
 
 @bot.command(name="магазин")
@@ -380,24 +558,26 @@ async def магазин(ctx):
     for item, price in SHOP_ITEMS.items():
         embed.add_field(
             name=item,
-            value=f"Цена: **{price} 🍃**\n"
-                  f"Купить: `!купить {item}`",
+            value=(
+                f"Цена: **{price} 🍃**\n"
+                f"Купить: `!купить {item}`"
+            ),
             inline=True
         )
 
     embed.set_footer(
-        text="Листики можно получить с помощью !поиск и игр."
+        text="Зарабатывай листики с помощью !поиск и игр."
     )
 
     await ctx.send(embed=embed)
 
 
 # ======================================================
-# 12. ПОКУПКА ПРЕДМЕТОВ
+# 13. ПОКУПКА ПРЕДМЕТОВ
 # ======================================================
 
 @bot.command(name="купить")
-async def купить(ctx, *, item_name: str = ""):
+async def купить(ctx, *, item_name=""):
     uid = ctx.author.id
 
     selected_item = next(
@@ -426,9 +606,10 @@ async def купить(ctx, *, item_name: str = ""):
             "Попробуй поискать что-нибудь: `!поиск`"
         )
 
-    # Списываем деньги и выдаём предмет
     balances[uid] = balance - price
     get_inventory(uid).append(selected_item)
+
+    save_memory()
 
     await ctx.send(
         f"🛍️ **Покупка совершена!**\n"
@@ -439,7 +620,7 @@ async def купить(ctx, *, item_name: str = ""):
 
 
 # ======================================================
-# 13. ИГРА: УГАДАЙ НАСТРОЕНИЕ
+# 14. УГАДАЙ НАСТРОЕНИЕ
 # ======================================================
 
 @bot.command(name="эмоция")
@@ -457,7 +638,7 @@ async def эмоция(ctx):
 
 
 @bot.command(name="угадай")
-async def угадай(ctx, *, guess: str = ""):
+async def угадай(ctx, *, guess=""):
     uid = ctx.author.id
     correct = mood_game.get(uid)
 
@@ -468,6 +649,8 @@ async def угадай(ctx, *, guess: str = ""):
         balances[uid] = get_balance(uid) + 10
         mood_game.pop(uid, None)
 
+        save_memory()
+
         await ctx.send(
             f"✨ Верно! Мне {correct}.\n"
             f"Награда: **+10 🍃**"
@@ -477,11 +660,11 @@ async def угадай(ctx, *, guess: str = ""):
 
 
 # ======================================================
-# 14. КОРМЛЕНИЕ
+# 15. КОРМЛЕНИЕ
 # ======================================================
 
 @bot.command(name="покормить")
-async def покормить(ctx, *, food: str = ""):
+async def покормить(ctx, *, food=""):
     uid = ctx.author.id
 
     if uid not in hunger:
@@ -492,6 +675,8 @@ async def покормить(ctx, *, food: str = ""):
     if any(item in food for item in FOOD_LIST):
         hunger[uid] = max(0, hunger[uid] - 35)
 
+        save_memory()
+
         await ctx.send(
             f"🦊 *Ням!* Теперь я "
             f"{get_hunger_state(hunger[uid])}"
@@ -501,7 +686,7 @@ async def покормить(ctx, *, food: str = ""):
 
 
 # ======================================================
-# 15. ПРАВДА ИЛИ ЛОЖЬ
+# 16. ПРАВДА ИЛИ ЛОЖЬ
 # ======================================================
 
 @bot.command(name="правда")
@@ -518,7 +703,7 @@ async def правда(ctx):
 
 
 @bot.command(name="ответ")
-async def ответ(ctx, *, guess: str = ""):
+async def ответ(ctx, *, guess=""):
     uid = ctx.author.id
     correct = truth_game.get(uid)
 
@@ -530,28 +715,27 @@ async def ответ(ctx, *, guess: str = ""):
     guess = guess.lower().strip()
 
     if guess in ["правда", "да", "true"]:
-        user_ans = True
+        user_answer = True
     elif guess in ["ложь", "нет", "false"]:
-        user_ans = False
+        user_answer = False
     else:
         return await ctx.send(
             "Ответь `правда` или `ложь`."
         )
 
-    if user_ans == correct:
+    if user_answer == correct:
         balances[uid] = get_balance(uid) + 5
 
-        await ctx.send(
-            "✨ Верно! Ты получаешь **+5 🍃**"
-        )
+        await ctx.send("✨ Верно! Ты получаешь **+5 🍃**")
     else:
-        await ctx.send("❌ Не-а! Неверный ответ.")
+        await ctx.send("❌ Неверный ответ!")
 
     truth_game.pop(uid, None)
+    save_memory()
 
 
 # ======================================================
-# 16. ПОМОЩЬ
+# 17. ПОМОЩЬ
 # ======================================================
 
 @bot.command(name="помощь")
@@ -577,9 +761,9 @@ async def помощь(ctx):
     embed.add_field(
         name="🎒 Коллекция и магазин",
         value=(
-            "`!рюкзак` — инвентарь и баланс\n"
-            "`!магазин` — список товаров\n"
-            "`!купить название` — покупка предмета"
+            "`!рюкзак` — предметы и баланс\n"
+            "`!магазин` — ассортимент\n"
+            "`!купить название` — покупка"
         ),
         inline=False
     )
@@ -594,12 +778,46 @@ async def помощь(ctx):
 
 
 # ======================================================
-# 17. СОБЫТИЯ DISCORD
+# 18. ПАМЯТЬ О ПОЛЬЗОВАТЕЛЯХ
+# ======================================================
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Не записываем команды как обычные сообщения
+    if message.content.startswith(bot.command_prefix):
+        await bot.process_commands(message)
+        return
+
+    uid = message.author.id
+    now = datetime.datetime.now()
+
+    if uid not in first_seen:
+        first_seen[uid] = now.isoformat()
+
+    # Запоминаем последние 200 символов сообщения
+    user_memory[uid] = message.content[:200]
+
+    last_messages[uid] = now
+    message_counts[uid] = message_counts.get(uid, 0) + 1
+
+    save_memory()
+
+    if "привет" in message.content.lower():
+        await message.channel.send("Привет! 🦊")
+
+
+# ======================================================
+# 19. ЗАПУСК И ФОНОВЫЕ ЗАДАЧИ
 # ======================================================
 
 @bot.event
 async def on_ready():
-    print(f"Бот {bot.user} онлайн!")
+    print(f"🦊 Сенкосан онлайн: {bot.user}")
+    print("🧠 Постоянная память активирована.")
+    print(f"📁 Файл памяти: {os.path.abspath(DATA_FILE)}")
 
     if not fox_lifecycle.is_running():
         fox_lifecycle.start()
@@ -611,35 +829,14 @@ async def on_ready():
         daily_fact_task.start()
 
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    # Команды обрабатываются отдельно
-    if message.content.startswith(bot.command_prefix):
-        await bot.process_commands(message)
-        return
-
-    uid = message.author.id
-
-    user_memory[uid] = message.content[:50]
-    last_messages[uid] = datetime.datetime.now()
-
-    if "привет" in message.content.lower():
-        await message.channel.send("Привет! 🦊")
-
-
 # ======================================================
-# 18. ЗАПУСК БОТА
+# 20. ЗАПУСК БОТА
 # ======================================================
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-print("Переменная DISCORD_TOKEN найдена:", TOKEN is not None)
-print("Токен непустой:", bool(TOKEN))
-
 if TOKEN:
+    print("🔑 Токен найден. Запускаем Сенкосан...")
     bot.run(TOKEN)
 else:
-    print("Токен не найден! Проверь переменную DISCORD_TOKEN.")
+    print("❌ Токен не найден! Проверь DISCORD_TOKEN.")
