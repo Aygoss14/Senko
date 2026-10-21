@@ -16,6 +16,7 @@ import random
 import re
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -1237,32 +1238,131 @@ async def on_message(message: discord.Message):
         log.exception("Could not send chat reply")
     await bot.process_commands(message)
 
+    
+def console_input_worker():
+    print("Консоль готова. Формат: send ID_канала текст")
+
+    while True:
+        try:
+            line = input("senko> ").strip()
+        except (EOFError, OSError):
+            print("Ввод консоли недоступен.")
+            break
+
+        parts = line.split(maxsplit=2)
+
+        if not parts:
+            continue
+
+        if parts[0].lower() == "send":
+            if len(parts) < 3:
+                print("Формат: send ID_канала текст")
+                continue
+
+            try:
+                channel_id = int(parts[1])
+            except ValueError:
+                print("Ошибка: ID канала должен быть числом.")
+                continue
+
+            future = asyncio.run_coroutine_threadsafe(
+                send_console_message(channel_id, parts[2]),
+                bot.loop
+            )
+
+            try:
+                future.result(timeout=30)
+                print("Сообщение отправлено!")
+            except Exception as error:
+                print(f"Ошибка отправки: {error}")
+
+        elif parts[0].lower() == "status":
+            print(f"Бот: {bot.user}")
+
+        else:
+            print("Доступные команды: send, status")
+
+
+async def send_console_message(channel_id: int, text: str):
+    channel = bot.get_channel(channel_id)
+
+    if channel is None:
+        channel = await bot.fetch_channel(channel_id)
+
+    if not isinstance(channel, discord.abc.Messageable):
+        raise ValueError("Этот канал не поддерживает отправку сообщений.")
+
+    await channel.send(
+        text,
+        allowed_mentions=discord.AllowedMentions.none()
+    )
+
+
+console_thread_started = False
+    
+
 # -----------------------------------------------------------------------------
 # Startup, command sync, errors
 # -----------------------------------------------------------------------------
+
 @bot.event
 async def on_ready():
     global commands_synced
+    global console_thread_started
+
+    if not console_thread_started:
+        console_thread_started = True
+        threading.Thread(
+            target=console_input_worker,
+            daemon=True
+        ).start()
+
     log.info("Senko 3.0 online as %s", bot.user)
     log.info("Data path: %s", DATA_FILE.resolve())
+
     if not commands_synced:
         try:
             if GUILD_ID_RAW:
                 guild = discord.Object(id=int(GUILD_ID_RAW))
                 bot.tree.copy_global_to(guild=guild)
                 synced = await bot.tree.sync(guild=guild)
-                log.info("Synced %s slash commands to guild %s", len(synced), GUILD_ID_RAW)
+                log.info(
+                    "Synced %s slash commands to guild %s",
+                    len(synced),
+                    GUILD_ID_RAW
+                )
             else:
                 synced = await bot.tree.sync()
                 log.info("Synced %s global slash commands", len(synced))
+
             commands_synced = True
+
         except (discord.HTTPException, ValueError):
-            log.exception("Slash command sync failed. Check the applications.commands scope and command names.")
-    log.info("AI chat: %s", "enabled (OpenAI API; usage may be billed)" if OPENAI_API_KEY else "fallback mode; set OPENAI_API_KEY for open-ended conversation")
-    if not memory_write_allowed: log.error("Data writes disabled to protect existing data: %s", memory_load_error)
-    if not fox_lifecycle.is_running(): fox_lifecycle.start()
-    if not hunger_tick.is_running(): hunger_tick.start()
-    if not daily_fact_task.is_running(): daily_fact_task.start()
+            log.exception(
+                "Slash command sync failed. Check the applications.commands scope and command names."
+            )
+
+    log.info(
+        "AI chat: %s",
+        "enabled (OpenAI API; usage may be billed)"
+        if OPENAI_API_KEY
+        else "fallback mode; set OPENAI_API_KEY for open-ended conversation"
+    )
+
+    if not memory_write_allowed:
+        log.error(
+            "Data writes disabled to protect existing data: %s",
+            memory_load_error
+        )
+
+    if not fox_lifecycle.is_running():
+        fox_lifecycle.start()
+
+    if not hunger_tick.is_running():
+        hunger_tick.start()
+
+    if not daily_fact_task.is_running():
+        daily_fact_task.start()
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
