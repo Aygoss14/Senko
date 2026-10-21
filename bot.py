@@ -1254,7 +1254,9 @@ def console_input_worker():
         if not parts:
             continue
 
-        if parts[0].lower() == "send":
+        command = parts[0].lower()
+
+        if command == "send":
             if len(parts) < 3:
                 print("Формат: send ID_канала текст")
                 continue
@@ -1276,11 +1278,36 @@ def console_input_worker():
             except Exception as error:
                 print(f"Ошибка отправки: {error}")
 
-        elif parts[0].lower() == "status":
+        elif command == "reply":
+            parts = line.split(maxsplit=3)
+
+            if len(parts) < 4:
+                print("Формат: reply ID_КАНАЛА ID_СООБЩЕНИЯ текст")
+                continue
+
+            try:
+                channel_id = int(parts[1])
+                message_id = int(parts[2])
+                message_text = parts[3]
+            except ValueError:
+                print("Ошибка: ID канала и сообщения должны быть числами.")
+                continue
+
+            try:
+                future = asyncio.run_coroutine_threadsafe(
+                    reply_console_message(channel_id, message_id, message_text),
+                    bot.loop
+                )
+                future.result(timeout=30)
+                print("Ответ отправлен!")
+            except Exception as e:
+                print(f"Ошибка ответа: {e}")
+
+        elif command == "status":
             print(f"Бот: {bot.user}")
 
         else:
-            print("Доступные команды: send, status")
+            print("Доступные команды: send, reply, status")
 
 
 async def send_console_message(channel_id: int, text: str):
@@ -1293,6 +1320,23 @@ async def send_console_message(channel_id: int, text: str):
         raise ValueError("Этот канал не поддерживает отправку сообщений.")
 
     await channel.send(
+        text,
+        allowed_mentions=discord.AllowedMentions.none()
+    )
+
+
+async def reply_console_message(channel_id: int, message_id: int, text: str):
+    channel = bot.get_channel(channel_id)
+
+    if channel is None:
+        channel = await bot.fetch_channel(channel_id)
+
+    if not hasattr(channel, "fetch_message"):
+        raise ValueError("Этот канал не поддерживает ответы на сообщения.")
+
+    message = await channel.fetch_message(message_id)
+
+    await message.reply(
         text,
         allowed_mentions=discord.AllowedMentions.none()
     )
@@ -1338,7 +1382,7 @@ async def on_ready():
             commands_synced = True
 
         except (discord.HTTPException, ValueError):
-            log.exception(
+                    log.exception(
                 "Slash command sync failed. Check the applications.commands scope and command names."
             )
 
