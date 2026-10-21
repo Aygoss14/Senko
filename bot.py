@@ -741,8 +741,8 @@ FOX_MEDIA = {
     "обычная": [
         # Вставь прямые ссылки на картинки Сенкосан
     ],
-    "радость": ["https://media1.tenor.com/m/AnGdBUdReMsAAAAd/senko-discord.gif",
-               "https://media1.tenor.com/m/gX40xPhJ_eYAAAAC/hanakomeme.gif"
+    "радость": ["https://i1.sndcdn.com/artworks-fw9FUs5hiMRyN3Ub-4N9iIQ-t500x500.jpg",
+               "https://s.pacn.ws/1/p/ye/nendoroid-no-1271-the-helpful-fox-senkosan-senko-619435.2.jpg?v=q4js4h&width=800"
     ],
     "смущение": [],
     "сонная": [],
