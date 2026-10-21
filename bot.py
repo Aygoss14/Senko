@@ -733,6 +733,94 @@ async def ответ(ctx, *, guess=""):
     truth_game.pop(uid, None)
     save_memory()
 
+# ======================================================
+# 🦊 КАРТИНКИ И GIF СЕНКОСАН
+# ======================================================
+
+FOX_MEDIA = {
+    "обычная": [
+        # Вставь прямые ссылки на картинки Сенкосан
+    ],
+    "радость": ["https://klipy.com/gifs/senko-the-helpful-fox-senko-san-2",
+               "https://klipy.com/gifs/senko-3"
+    ],
+    "смущение": [],
+    "сонная": [],
+    "удивление": [],
+    "обида": [],
+    "танец": [],
+    "gif": []
+}
+
+
+@bot.command(name="лиса")
+async def лиса(ctx, *, mood=""):
+    mood = mood.lower().strip()
+
+    # Без аргумента выбираем любую категорию
+    if not mood:
+        available = [
+            name for name, urls in FOX_MEDIA.items()
+            if urls
+        ]
+
+        if not available:
+            return await ctx.send(
+                "🦊 У меня пока нет картинок! "
+                "Добавь ссылки в FOX_MEDIA."
+            )
+
+        mood = random.choice(available)
+
+    if mood not in FOX_MEDIA:
+        moods = ", ".join(
+            name for name, urls in FOX_MEDIA.items()
+            if urls
+        ) or "пока нет"
+
+        return await ctx.send(
+            f"🦊 Не знаю такую эмоцию!\n"
+            f"Доступные категории: {moods}"
+        )
+
+    urls = FOX_MEDIA[mood]
+
+    if not urls:
+        return await ctx.send(
+            f"🦊 Для категории «{mood}» "
+            f"пока нет изображений."
+        )
+
+    url = random.choice(urls)
+
+    embed = discord.Embed(
+        title=f"🦊 Сенкосан — {mood}",
+        color=0xff8c00
+    )
+    embed.set_image(url=url)
+
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="лиса_помощь")
+async def лиса_помощь(ctx):
+    embed = discord.Embed(
+        title="🦊 Галерея Сенкосан",
+        description=(
+            "`!лиса` — случайная реакция\n"
+            "`!лиса радость` — радость\n"
+            "`!лиса смущение` — смущение\n"
+            "`!лиса сонная` — сонное настроение\n"
+            "`!лиса удивление` — удивление\n"
+            "`!лиса обида` — обида\n"
+            "`!лиса танец` — танец\n"
+            "`!лиса gif` — случайная GIF"
+        ),
+        color=0xff8c00
+    )
+
+    await ctx.send(embed=embed)
+
 
 # ======================================================
 # 17. ПОМОЩЬ
