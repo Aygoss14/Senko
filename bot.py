@@ -741,8 +741,8 @@ FOX_MEDIA = {
     "обычная": [
         # Вставь прямые ссылки на картинки Сенкосан
     ],
-    "радость": ["https://klipy.com/gifs/senko-the-helpful-fox-senko-san-2",
-               "https://klipy.com/gifs/senko-3"
+    "радость": ["https://tenor.com/ru/view/senko-discord-gif-176094506441078987",
+               "https://tenor.com/ru/view/hanakomeme-gif-9330953498542079462"
     ],
     "смущение": [],
     "сонная": [],
