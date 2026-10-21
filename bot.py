@@ -236,5 +236,11 @@ async def on_message(message):
 # ======================================================
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-if TOKEN: bot.run(TOKEN)
-else: print("Токен не найден!")
+
+print("Переменная DISCORD_TOKEN найдена:", TOKEN is not None)
+print("Токен непустой:", bool(TOKEN))
+
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("Токен не найден!")
