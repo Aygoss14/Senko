@@ -741,8 +741,8 @@ FOX_MEDIA = {
     "обычная": [
         # Вставь прямые ссылки на картинки Сенкосан
     ],
-    "радость": ["https://tenor.com/ru/view/senko-discord-gif-176094506441078987",
-               "https://tenor.com/ru/view/hanakomeme-gif-9330953498542079462"
+    "радость": ["https://media1.tenor.com/m/AnGdBUdReMsAAAAd/senko-discord.gif",
+               "https://media1.tenor.com/m/gX40xPhJ_eYAAAAC/hanakomeme.gif"
     ],
     "смущение": [],
     "сонная": [],
