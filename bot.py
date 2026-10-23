@@ -1152,13 +1152,6 @@ async def on_message(message: discord.Message):
         return
     uid = message.author.id
     now = dt.datetime.now()
-    profile = ensure_profile(uid)
-    if profile.get("memory_enabled", True):
-        first_seen.setdefault(uid, now.isoformat())
-        user_memory[uid] = message.content[:200]
-        last_messages[uid] = now
-        message_counts[uid] = message_counts.get(uid, 0) + 1
-    inferred = infer_mood(message.content)
     alias = detect_alias(message.content)
     mentioned = bool(bot.user and (bot.user in message.mentions or re.search(rf"<@!?{bot.user.id}>", message.content)))
     in_senko_channel = message.channel.id == CHAT_CHANNEL_ID
@@ -1171,7 +1164,7 @@ async def on_message(message: discord.Message):
     if previous and (now - previous).total_seconds() < CHAT_USER_COOLDOWN_SECONDS and not mentioned and alias is None:
         await bot.process_commands(message)
         return
-    if inferred: set_mood(inferred)
+    if infer_mood(message.content): set_mood(infer_mood(message.content))
     raw = remove_bot_mention(message.content, bot.user)
     if alias:
         raw = ALIAS_PATTERN.sub("", raw, count=1).strip(" ,.!?—-\n\t")
@@ -1185,6 +1178,11 @@ async def on_message(message: discord.Message):
         reply = generate_local_reply(uid, message.channel.id, message.author.display_name, raw)
         await message.reply(reply, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
         last_chat_reply[uid] = now
+        profile = ensure_profile(uid)
+        if profile.get("memory_enabled", True):
+            first_seen.setdefault(uid, now.isoformat())
+            last_messages[uid] = now
+            message_counts[uid] = message_counts.get(uid, 0) + 1
         award_relationship(uid, 1, "chat", 6)
         save_memory()
     except discord.HTTPException:
