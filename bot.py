@@ -873,6 +873,7 @@ async def slash_memory(interaction: discord.Interaction, action: app_commands.Ch
     if action.value == "clear":
         personal_memories.pop(uid, None)
         user_memory.pop(uid, None)
+        local_dialogue.forget_user(uid)
         save_memory()
         return await interaction.response.send_message("🧹 Личные воспоминания удалены.", ephemeral=True)
     lines = ["🧠 **Твоя личная память**"]
@@ -1164,7 +1165,8 @@ async def on_message(message: discord.Message):
     if previous and (now - previous).total_seconds() < CHAT_USER_COOLDOWN_SECONDS and not mentioned and alias is None:
         await bot.process_commands(message)
         return
-    if infer_mood(message.content): set_mood(infer_mood(message.content))
+    inferred = infer_mood(message.content)
+    if inferred: set_mood(inferred)
     raw = remove_bot_mention(message.content, bot.user)
     if alias:
         raw = ALIAS_PATTERN.sub("", raw, count=1).strip(" ,.!?—-\n\t")
