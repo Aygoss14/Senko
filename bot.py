@@ -2,7 +2,7 @@
 
 Keeps data.json keys from Senko 2.0 and preserves legacy ! commands during transition.
 Configure DISCORD_TOKEN; optionally configure SENKO_GUILD_ID, SENKO_BIND_ALLOWED_USER_ID,
-OPENAI_API_KEY and OPENAI_MODEL in the hosting panel / .env file.
+in the hosting panel / .env file.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import aiohttp
+from senko_dialogue import LocalDialogue
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -40,8 +41,6 @@ CHANNEL_ID = int(os.getenv("SENKO_CHANNEL_ID", "1492134822666174605"))
 CHAT_CHANNEL_ID = int(os.getenv("SENKO_CHAT_CHANNEL_ID", str(CHANNEL_ID)))
 GUILD_ID_RAW = os.getenv("SENKO_GUILD_ID", "").strip()
 BIND_ALLOWED_USER_ID = int(os.getenv("SENKO_BIND_ALLOWED_USER_ID", "0") or "0")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
 CHAT_USER_COOLDOWN_SECONDS = 8
 FOX_COOLDOWN_MINUTES = 30
 FOX_ACTION_CHANCE = 0.25
@@ -166,7 +165,7 @@ _persisted_root: dict[str, Any] = {}
 memory_write_allowed = True
 memory_load_error: Optional[str] = None
 backup_created = False
-chat_history: dict[str, list[dict[str, str]]] = {}  # In-RAM only; chat transcripts aren't saved to data.json.
+local_dialogue = LocalDialogue()
 last_chat_reply: dict[int, dt.datetime] = {}
 commands_synced = False
 
@@ -864,6 +863,7 @@ async def slash_memory(interaction: discord.Interaction, action: app_commands.Ch
         profile["memory_enabled"] = False
         personal_memories.pop(uid, None)
         user_memory.pop(uid, None)
+        local_dialogue.forget_user(uid)
         save_memory()
         return await interaction.response.send_message("🦊 Личная память выключена и очищена. Групповая память не затронута.", ephemeral=True)
     if action.value == "on":
@@ -1012,7 +1012,7 @@ async def slash_diagnostics(interaction: discord.Interaction):
     if not is_admin_member(interaction.user): return await interaction.response.send_message("Доступно администраторам сервера с Manage Server.", ephemeral=True)
     lines = [f"{'✅' if DATA_FILE.exists() else '⚠️'} data.json существует", f"{'✅' if memory_write_allowed else '⚠️'} запись разрешена", f"{'✅' if isinstance(profiles, dict) else '⚠️'} профили загружены", f"{'✅' if isinstance(FOX_MEDIA, dict) else '⚠️'} каталог медиа доступен"]
     if memory_load_error: lines.append("Предупреждение: " + memory_load_error[:300])
-    lines.extend([f"Путь данных: `{DATA_FILE.resolve()}`", f"Резервные копии: `{BACKUP_DIR.resolve()}`", f"AI-диалог: {'включён через API' if OPENAI_API_KEY else 'без API — ограниченные шаблонные ответы'}"])
+    lines.extend([f"Путь данных: `{DATA_FILE.resolve()}`", f"Резервные копии: `{BACKUP_DIR.resolve()}`", "Диалоги: локальные, без AI API"])
     await interaction.response.send_message("🛠️ **Диагностика Senko 3.0**\n" + "\n".join(lines), ephemeral=True)
 
 @bot.tree.command(name="сенко_медиа_проверить", description="Проверить доступность URL медиа (администратор)")
@@ -1071,66 +1071,21 @@ def remove_bot_mention(text: str, bot_user: Optional[discord.ClientUser]) -> str
         text = re.sub(rf"<@!?{bot_user.id}>", "", text)
     return text.strip()
 
-def local_chat_reply(text: str, alias: Optional[str], level: int) -> str:
-    lower = text.lower().strip()
-    if not lower: return "Да? Ты звала меня? *Сенко поворачивает ушки к тебе.* 🦊"
-    if any(x in lower for x in ("привет", "здравствуй", "хай", "hello", "hi")):
-        return random.choice(["Приве-е-ет! *Сенко радостно машет хвостиками.* Как ты сегодня? 🦊", "Ой, привет! Я как раз тут. Расскажешь, как прошёл день? 🌸"])
-    if any(x in lower for x in ("спасибо", "благодарю", "ты лучшая")):
-        return random.choice(["Хи-хи, всегда пожалуйста! Мне приятно помогать. 💛", "Не за что! *Сенко довольно шевелит ушками.*"])
-    if any(x in lower for x in ("грустно", "плохо", "тяжело", "устал", "устала", "одиноко")):
-        return random.choice(["Иди сюда, немного посидим рядом. Не обязательно решать всё сразу. 🦊", "Ох… хочешь рассказать, что случилось? Я послушаю. 🌸"])
-    if "?" in lower or any(lower.startswith(x) for x in ("почему", "как ", "зачем", "когда", "что ", "кто ")):
-        return "Хм-м, хороший вопрос! Я могу поддержать разговор, но для развёрнутых ответов на любые темы нужно подключить AI API через OPENAI_API_KEY. Расскажешь чуть подробнее? 🦊"
-    if level >= 4:
-        return random.choice([f"*Сенко внимательно тебя слушает.* Я рада, что ты со мной разговариваешь. Что ты думаешь об этом сам? 💛", f"Угу, я слушаю тебя внимательно. Хочешь, вместе это обдумаем? 🦊"])
-    if level >= 2:
-        return random.choice(["Угу-угу, продолжай, мне интересно! 🦊", "*Сенко наклоняет голову.* И что было дальше? Рассказывай! 🌸", "Хи-хи, поняла. А как ты сам к этому относишься?"])
-    return random.choice(["О, расскажи подробнее! 🦊", "Я слушаю. И что ты об этом думаешь?", "Хм-м… интересно. Что случилось дальше?"])
-
-async def generate_ai_reply(user_id: int, channel_id: int, user_name: str, text: str, alias: Optional[str]) -> str:
-    key = f"{channel_id}:{user_id}"
-    history = chat_history.setdefault(key, [])
-    points = ensure_profile(user_id)["relationship_points"]
-    level_name, level = relationship_level(points)
-    addressing = f"Пользователь обратился к тебе как «{alias}»." if alias else "Пользователь написал тебе напрямую."
-    if not OPENAI_API_KEY:
-        reply = local_chat_reply(text, alias, level)
-        history.extend([{"role": "user", "content": text[:700]}, {"role": "assistant", "content": reply[:1200]}])
-        del history[:-MAX_CHAT_HISTORY]
-        return reply
-    system_prompt = (
-        "Ты — Сенко, добрая, заботливая и немного игривая лиса-компаньон из вымышленного мира. "
-        "Пиши на языке пользователя, обычно на русском. Веди естественный диалог, помни недавний контекст этой сессии, "
-        "иногда задавай уместные встречные вопросы, не повторяй одну и ту же фразу. Не утверждай, что ты реальное существо "
-        "или обладаешь настоящим сознанием. Не выдумывай факты о пользователе. Не обещай выполнять действия в Discord, "
-        "если ты их фактически не выполнила. Сохраняй дружелюбный, тёплый стиль и отвечай обычно в 2–5 предложениях. "
-        f"Имя пользователя: {user_name}. Уровень отношений по игровой системе: {level_name} (уровень {level}). {addressing} "
-        "Все отношения — ролевая механика; личные факты из одного пользователя не раскрывай другому."
+def generate_local_reply(user_id: int, channel_id: int, user_name: str, text: str) -> str:
+    profile = ensure_profile(user_id)
+    facts = [entry["text"] for entry in personal_memories.get(user_id, [])
+             if isinstance(entry, dict) and isinstance(entry.get("text"), str)] if profile.get("memory_enabled", True) else []
+    channel = bot.get_channel(channel_id)
+    guild_id = getattr(getattr(channel, "guild", None), "id", None)
+    common = [entry["text"] for entry in group_memories.get(str(guild_id), [])
+              if isinstance(entry, dict) and isinstance(entry.get("text"), str)] if guild_id else []
+    return local_dialogue.reply(
+        user_id=user_id, channel_id=channel_id, user_name=user_name, text=text,
+        mood=current_mood, hunger=hunger.get(user_id, 50),
+        relationship_points=profile["relationship_points"],
+        memories=facts, group_facts=common,
     )
-    messages = [{"role": "developer", "content": system_prompt}, *history[-MAX_CHAT_HISTORY:], {"role": "user", "content": text[:1500]}]
-    timeout = aiohttp.ClientTimeout(total=25, connect=8)
-    try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
-                json={"model": OPENAI_MODEL, "messages": messages, "max_completion_tokens": 280},
-            ) as response:
-                payload = await response.json(content_type=None)
-                if response.status >= 400:
-                    log.warning("AI API returned HTTP %s: %s", response.status, str(payload)[:300])
-                    return local_chat_reply(text, alias, level)
-                reply = payload["choices"][0]["message"].get("content")
-                if not isinstance(reply, str) or not reply.strip():
-                    return local_chat_reply(text, alias, level)
-                reply = reply.strip()[:1900]
-                history.extend([{"role": "user", "content": text[:1500]}, {"role": "assistant", "content": reply}])
-                del history[:-MAX_CHAT_HISTORY]
-                return reply
-    except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, IndexError, TypeError, ValueError) as error:
-        log.warning("AI chat failed; falling back to local reply: %s", error)
-        return local_chat_reply(text, alias, level)
+
 
 # -----------------------------------------------------------------------------
 # Background tasks
@@ -1204,9 +1159,6 @@ async def on_message(message: discord.Message):
         last_messages[uid] = now
         message_counts[uid] = message_counts.get(uid, 0) + 1
     inferred = infer_mood(message.content)
-    if inferred: set_mood(inferred)
-    save_memory()
-
     alias = detect_alias(message.content)
     mentioned = bool(bot.user and (bot.user in message.mentions or re.search(rf"<@!?{bot.user.id}>", message.content)))
     in_senko_channel = message.channel.id == CHAT_CHANNEL_ID
@@ -1219,6 +1171,7 @@ async def on_message(message: discord.Message):
     if previous and (now - previous).total_seconds() < CHAT_USER_COOLDOWN_SECONDS and not mentioned and alias is None:
         await bot.process_commands(message)
         return
+    if inferred: set_mood(inferred)
     raw = remove_bot_mention(message.content, bot.user)
     if alias:
         raw = ALIAS_PATTERN.sub("", raw, count=1).strip(" ,.!?—-\n\t")
@@ -1229,7 +1182,7 @@ async def on_message(message: discord.Message):
     else:
         alias_style = alias
     try:
-        reply = await generate_ai_reply(uid, message.channel.id, message.author.display_name, raw, alias_style)
+        reply = generate_local_reply(uid, message.channel.id, message.author.display_name, raw)
         await message.reply(reply, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
         last_chat_reply[uid] = now
         award_relationship(uid, 1, "chat", 6)
@@ -1382,16 +1335,11 @@ async def on_ready():
             commands_synced = True
 
         except (discord.HTTPException, ValueError):
-                    log.exception(
+            log.exception(
                 "Slash command sync failed. Check the applications.commands scope and command names."
             )
 
-    log.info(
-        "AI chat: %s",
-        "enabled (OpenAI API; usage may be billed)"
-        if OPENAI_API_KEY
-        else "fallback mode; set OPENAI_API_KEY for open-ended conversation"
-    )
+    log.info("Offline dialogues enabled")
 
     if not memory_write_allowed:
         log.error(
